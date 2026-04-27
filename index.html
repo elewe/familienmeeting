@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Familienmeeting</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="manifest" href="manifest.webmanifest" />
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="view-title">Sonntag</h1>
+    <div class="topbar-right">
+      <button class="icon-btn" id="btn-menu" aria-label="Menü">⋯</button>
+    </div>
+  </header>
+
+  <main id="app">
+    <!-- Meeting -->
+    <section class="view" data-view="meeting">
+      <div class="card hero">
+        <div class="hero-eyebrow">Familienmeeting</div>
+        <div class="hero-week" id="hero-week">Woche</div>
+        <div class="hero-date" id="hero-date"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Ablauf</h2>
+        </div>
+        <ol class="agenda">
+          <li><a data-go="menus">1. Menüs für die Woche</a></li>
+          <li><a data-go="duties">2. Verantwortungspakete verteilen</a></li>
+          <li><a data-go="notes">3. Themen &amp; Notizen</a></li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Diese Woche kochen</h2>
+          <button class="link" data-go="menus">Öffnen</button>
+        </div>
+        <ul class="week-mini" id="week-mini"></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Diese Woche dran</h2>
+          <button class="link" data-go="duties">Öffnen</button>
+        </div>
+        <ul class="duty-mini" id="duty-mini"></ul>
+      </div>
+    </section>
+
+    <!-- Menüs -->
+    <section class="view" data-view="menus" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Wochenmenü</h2>
+          <div class="row-actions">
+            <button class="btn ghost" id="btn-week-prev" aria-label="Vorherige Woche">‹</button>
+            <button class="btn ghost" id="btn-week-next" aria-label="Nächste Woche">›</button>
+          </div>
+        </div>
+        <div class="muted" id="menus-week-label"></div>
+        <ul class="week-list" id="week-list"></ul>
+        <div class="row-actions end">
+          <button class="btn ghost" id="btn-week-clear">Woche leeren</button>
+          <button class="btn" id="btn-week-fill">Vorschläge für ganze Woche</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Rezeptbibliothek -->
+    <section class="view" data-view="recipes" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Rezeptbibliothek</h2>
+          <button class="btn" id="btn-add-recipe">+ Neu</button>
+        </div>
+        <input type="search" id="recipe-search" placeholder="Suchen…" />
+        <div class="chips" id="recipe-tag-filter"></div>
+        <ul class="recipe-list" id="recipe-list"></ul>
+      </div>
+    </section>
+
+    <!-- Verantwortungen -->
+    <section class="view" data-view="duties" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Verantwortungen diese Woche</h2>
+          <div class="row-actions">
+            <button class="btn ghost" id="btn-duty-week-prev" aria-label="Vorherige Woche">‹</button>
+            <button class="btn ghost" id="btn-duty-week-next" aria-label="Nächste Woche">›</button>
+          </div>
+        </div>
+        <div class="muted" id="duties-week-label"></div>
+        <ul class="duty-list" id="duty-list"></ul>
+        <div class="row-actions end">
+          <button class="btn ghost" id="btn-duty-clear">Zurücksetzen</button>
+          <button class="btn" id="btn-duty-auto">Fair verteilen</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pakete-Bibliothek -->
+    <section class="view" data-view="packages" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Verantwortungspakete</h2>
+          <button class="btn" id="btn-add-package">+ Neu</button>
+        </div>
+        <ul class="package-list" id="package-list"></ul>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>Familie</h2>
+          <button class="btn" id="btn-add-member">+ Person</button>
+        </div>
+        <ul class="member-list" id="member-list"></ul>
+      </div>
+    </section>
+
+    <!-- Notizen -->
+    <section class="view" data-view="notes" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Themen &amp; Notizen</h2>
+          <button class="btn" id="btn-add-note">+ Thema</button>
+        </div>
+        <ul class="note-list" id="note-list"></ul>
+      </div>
+    </section>
+
+    <!-- Einstellungen -->
+    <section class="view" data-view="settings" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Daten</h2></div>
+        <div class="settings-rows">
+          <button class="btn ghost" id="btn-export">Export (JSON)</button>
+          <label class="btn ghost file-btn">
+            Import (JSON)
+            <input type="file" id="file-import" accept="application/json" hidden />
+          </label>
+          <button class="btn ghost" id="btn-seed">Beispieldaten laden</button>
+          <button class="btn danger" id="btn-reset">Alles zurücksetzen</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Über</h2></div>
+        <p class="muted small">Familienmeeting · lokal gespeichert auf diesem Gerät. Keine Cloud, keine Konten.</p>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" role="tablist">
+    <button class="tab" data-go="meeting">
+      <span class="tab-ico">●</span><span>Meeting</span>
+    </button>
+    <button class="tab" data-go="menus">
+      <span class="tab-ico">◍</span><span>Menüs</span>
+    </button>
+    <button class="tab" data-go="recipes">
+      <span class="tab-ico">◇</span><span>Rezepte</span>
+    </button>
+    <button class="tab" data-go="duties">
+      <span class="tab-ico">◑</span><span>Aufgaben</span>
+    </button>
+    <button class="tab" data-go="packages">
+      <span class="tab-ico">▣</span><span>Pakete</span>
+    </button>
+  </nav>
+
+  <!-- Modal-Container -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal-card" id="modal-card"></div>
+  </div>
+
+  <!-- Side menu -->
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-card">
+      <button class="sheet-item" data-go="meeting">Meeting</button>
+      <button class="sheet-item" data-go="menus">Menüs der Woche</button>
+      <button class="sheet-item" data-go="recipes">Rezeptbibliothek</button>
+      <button class="sheet-item" data-go="duties">Verantwortungen der Woche</button>
+      <button class="sheet-item" data-go="packages">Pakete &amp; Familie</button>
+      <button class="sheet-item" data-go="notes">Themen &amp; Notizen</button>
+      <button class="sheet-item" data-go="settings">Einstellungen</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
