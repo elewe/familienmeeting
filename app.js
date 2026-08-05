@@ -534,6 +534,7 @@
   const modalCard = document.getElementById('modal-card');
 
   function openModal(html, onMount) {
+    if (!sheetEl.hidden) closeSheet();
     modalCard.innerHTML = html;
     modalEl.hidden = false;
     document.body.style.overflow = 'hidden';
@@ -547,7 +548,11 @@
   modalEl.addEventListener('click', e => { if (e.target === modalEl) closeModal(); });
 
   const sheetEl = document.getElementById('sheet');
-  function openSheet() { sheetEl.hidden = false; document.body.style.overflow = 'hidden'; }
+  function openSheet() {
+    if (!modalEl.hidden) closeModal();
+    sheetEl.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
   function closeSheet() { sheetEl.hidden = true; document.body.style.overflow = ''; }
   sheetEl.addEventListener('click', e => { if (e.target === sheetEl) closeSheet(); });
 
