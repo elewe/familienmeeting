@@ -339,6 +339,31 @@ textarea { resize: vertical; min-height: 80px; }
 .suggest-list .info { flex: 1; min-width: 0; }
 .suggest-list .reason { font-size: 12px; color: var(--muted); }
 
+/* Shopping list */
+.shopping-list { list-style: none; padding: 0; margin: 0; }
+.shopping-group-head {
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em;
+  padding: 14px 4px 6px;
+}
+.shopping-group-head:first-child { padding-top: 4px; }
+.shopping-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 4px; border-bottom: 1px solid var(--line);
+}
+.shopping-check { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
+.shopping-check input { width: 20px; height: 20px; flex: 0 0 auto; }
+.add-row { display: flex; gap: 8px; margin-top: 12px; }
+.add-row input { flex: 1; }
+
+/* Ingredient rows in recipe editor */
+.ingredient-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.ingredient-row { display: flex; gap: 6px; align-items: center; }
+.ingredient-row .ing-qty { flex: 0 0 56px; }
+.ingredient-row .ing-unit { flex: 0 0 64px; }
+.ingredient-row .ing-name { flex: 1; }
+.ingredient-row .ing-del { width: 36px; height: 36px; font-size: 18px; flex: 0 0 auto; }
+
 /* Responsive tweaks */
 @media (max-width: 360px) {
   .week-list .day-name { flex: 0 0 80px; }

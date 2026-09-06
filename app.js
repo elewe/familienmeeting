@@ -18,7 +18,8 @@
     recipes: [],
     packages: [],
     weeks: {},
-    settings: { seenSeedPrompt: false },
+    settings: { seenSeedPrompt: false, bringApiBase: '' },
+    bring: null,
   });
 
   let state = load();
@@ -109,7 +110,10 @@
     if (!state.weeks[key]) {
       state.weeks[key] = { menus: {}, duties: {}, notes: [] };
     }
-    return state.weeks[key];
+    const week = state.weeks[key];
+    week.shoppingChecked = week.shoppingChecked || {};
+    week.shoppingExtra = week.shoppingExtra || [];
+    return week;
   }
 
   // ------------------------------------------------------------------
@@ -118,6 +122,7 @@
   const VIEW_TITLES = {
     meeting: 'Sonntag',
     menus: 'Menüs der Woche',
+    shopping: 'Einkaufsliste',
     recipes: 'Rezepte',
     duties: 'Verantwortungen',
     packages: 'Pakete & Familie',
@@ -151,6 +156,7 @@
     switch (currentView) {
       case 'meeting': return renderMeeting();
       case 'menus': return renderMenus();
+      case 'shopping': return renderShopping();
       case 'recipes': return renderRecipes();
       case 'duties': return renderDuties();
       case 'packages': return renderPackages();
@@ -241,6 +247,129 @@
     });
   }
 
+  // ------------------------------------------------------------------
+  // Einkaufsliste
+  // ------------------------------------------------------------------
+  function buildShoppingGroups(monday) {
+    const week = getWeek(monday);
+    const groups = [];
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(monday, i);
+      const key = isoDate(d);
+      const slot = week.menus[key];
+      if (!slot?.recipeId) continue;
+      const r = state.recipes.find(x => x.id === slot.recipeId);
+      if (!r || !r.ingredients?.length) continue;
+      groups.push({
+        label: `${DAY_NAMES_SHORT[i]} · ${r.name}`,
+        items: r.ingredients.map(ing => ({
+          checkKey: `${r.id}:${ing.id}`,
+          text: [ing.quantity, ing.unit, ing.name].filter(Boolean).join(' ').trim(),
+        })),
+      });
+    }
+    return groups;
+  }
+
+  function shoppingOpenItems(monday) {
+    const week = getWeek(monday);
+    const out = [];
+    buildShoppingGroups(monday).forEach(g => g.items.forEach(item => {
+      if (!week.shoppingChecked[item.checkKey]) out.push(item.text);
+    }));
+    week.shoppingExtra.forEach(ex => { if (!ex.done) out.push(ex.text); });
+    return out;
+  }
+
+  function renderShopping() {
+    document.getElementById('shopping-week-label').textContent = `KW ${isoWeekKey(planningMonday).split('-W')[1]} · ${formatWeekRange(planningMonday)}`;
+    const week = getWeek(planningMonday);
+    const groups = buildShoppingGroups(planningMonday);
+    const list = document.getElementById('shopping-list');
+    list.innerHTML = '';
+
+    if (!groups.length && !week.shoppingExtra.length) {
+      list.innerHTML = `<li class="note-row"><div class="info muted small">Keine Zutaten geplant. Hinterlege Zutaten bei den Rezepten dieser Woche, oder füge unten Artikel von Hand hinzu.</div></li>`;
+    }
+
+    groups.forEach(g => {
+      const head = document.createElement('li');
+      head.className = 'shopping-group-head';
+      head.textContent = g.label;
+      list.appendChild(head);
+      g.items.forEach(item => {
+        const done = !!week.shoppingChecked[item.checkKey];
+        const li = document.createElement('li');
+        li.className = 'shopping-row';
+        li.innerHTML = `
+          <label class="shopping-check">
+            <input type="checkbox" data-check="${item.checkKey}" ${done ? 'checked' : ''} />
+            <span style="text-decoration:${done ? 'line-through' : 'none'};opacity:${done ? .55 : 1}">${escapeHtml(item.text)}</span>
+          </label>
+        `;
+        list.appendChild(li);
+      });
+    });
+
+    if (week.shoppingExtra.length) {
+      const head = document.createElement('li');
+      head.className = 'shopping-group-head';
+      head.textContent = 'Weitere Artikel';
+      list.appendChild(head);
+      week.shoppingExtra.forEach(ex => {
+        const li = document.createElement('li');
+        li.className = 'shopping-row';
+        li.innerHTML = `
+          <label class="shopping-check">
+            <input type="checkbox" data-check-extra="${ex.id}" ${ex.done ? 'checked' : ''} />
+            <span style="text-decoration:${ex.done ? 'line-through' : 'none'};opacity:${ex.done ? .55 : 1}">${escapeHtml(ex.text)}</span>
+          </label>
+          <button class="icon-btn" data-del-extra="${ex.id}" aria-label="Löschen">🗑</button>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    list.querySelectorAll('[data-check]').forEach(cb => cb.addEventListener('change', () => {
+      week.shoppingChecked[cb.dataset.check] = cb.checked;
+      save(); renderShopping();
+    }));
+    list.querySelectorAll('[data-check-extra]').forEach(cb => cb.addEventListener('change', () => {
+      const ex = week.shoppingExtra.find(x => x.id === cb.dataset.checkExtra);
+      if (ex) { ex.done = cb.checked; save(); renderShopping(); }
+    }));
+    list.querySelectorAll('[data-del-extra]').forEach(btn => btn.addEventListener('click', () => {
+      week.shoppingExtra = week.shoppingExtra.filter(x => x.id !== btn.dataset.delExtra);
+      save(); renderShopping();
+    }));
+  }
+
+  function addShoppingExtra() {
+    const input = document.getElementById('shopping-add-input');
+    const text = input.value.trim();
+    if (!text) return;
+    const week = getWeek(planningMonday);
+    week.shoppingExtra.push({ id: uid(), text, done: false });
+    input.value = '';
+    save();
+    renderShopping();
+  }
+
+  async function copyShoppingList() {
+    const items = shoppingOpenItems(planningMonday);
+    if (!items.length) { toast('Liste ist leer'); return; }
+    const text = items.join('\n');
+    if (navigator.share) {
+      try { await navigator.share({ text, title: 'Einkaufsliste' }); return; } catch (e) { /* Abbruch oder nicht unterstützt: auf Zwischenablage ausweichen */ }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('In Zwischenablage kopiert');
+    } catch (e) {
+      toast('Kopieren nicht möglich');
+    }
+  }
+
   function renderRecipes() {
     const chips = document.getElementById('recipe-tag-filter');
     const allTags = uniqueTags();
@@ -275,10 +404,11 @@
         li.className = 'recipe-row';
         const stars = '★'.repeat(r.rating || 0) + '☆'.repeat(5 - (r.rating || 0));
         const last = r.lastUsedAt ? `zuletzt ${relativeDaysLabel(r.lastUsedAt)}` : 'noch nie gekocht';
+        const ingCount = r.ingredients?.length || 0;
         li.innerHTML = `
           <div class="info">
             <div class="title">${escapeHtml(r.name)}</div>
-            <div class="meta">${r.tags.map(escapeHtml).join(' · ') || '—'} · ${last}</div>
+            <div class="meta">${r.tags.map(escapeHtml).join(' · ') || '—'} · ${last}${ingCount ? ' · ' + ingCount + ' Zutaten' : ''}</div>
             <div class="stars">${stars}</div>
           </div>
           <div class="row-actions-inline">
@@ -400,7 +530,19 @@
     }));
   }
 
-  function renderSettings() { /* statisch */ }
+  function renderSettings() {
+    const baseInput = document.getElementById('bring-api-base');
+    if (document.activeElement !== baseInput) baseInput.value = state.settings.bringApiBase || '';
+    const status = document.getElementById('bring-status');
+    const disBtn = document.getElementById('btn-bring-disconnect');
+    if (state.bring?.accessToken) {
+      status.textContent = `Verbunden als ${state.bring.email}${state.bring.listName ? ` · Liste „${state.bring.listName}"` : ''}`;
+      disBtn.hidden = false;
+    } else {
+      status.textContent = 'Nicht verbunden.';
+      disBtn.hidden = true;
+    }
+  }
 
   // ------------------------------------------------------------------
   // Filter & Helpers
@@ -633,7 +775,7 @@
   // ------------------------------------------------------------------
   function openRecipeEditor(id) {
     const isNew = !id;
-    const r = isNew ? { id: uid(), name: '', tags: [], notes: '', rating: 0, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0 }
+    const r = isNew ? { id: uid(), name: '', tags: [], notes: '', rating: 0, ingredients: [], createdAt: isoDate(today()), lastUsedAt: null, useCount: 0 }
                     : { ...state.recipes.find(x => x.id === id) };
 
     openModal(`
@@ -648,8 +790,12 @@
       <label>Bewertung</label>
       <div class="stars-input" id="r-stars"></div>
 
-      <label>Notizen / Zutaten</label>
-      <textarea id="r-notes" placeholder="Kurze Notiz zu Zutaten oder Zubereitung">${escapeHtml(r.notes || '')}</textarea>
+      <label>Zutaten <span class="muted small">(für die Einkaufsliste)</span></label>
+      <div class="ingredient-rows" id="r-ingredients"></div>
+      <button type="button" class="btn ghost" id="r-add-ingredient">+ Zutat</button>
+
+      <label>Notizen / Zubereitung</label>
+      <textarea id="r-notes" placeholder="Kurze Notiz zur Zubereitung">${escapeHtml(r.notes || '')}</textarea>
 
       <div class="actions">
         <button class="btn ghost" data-close>Abbrechen</button>
@@ -658,6 +804,31 @@
     `, (root) => {
       let chosenTags = [...r.tags];
       let rating = r.rating || 0;
+      let ingredients = (r.ingredients || []).map(i => ({ ...i }));
+
+      const renderIngredientRows = () => {
+        const box = root.querySelector('#r-ingredients');
+        box.innerHTML = ingredients.map((ing, idx) => `
+          <div class="ingredient-row" data-idx="${idx}">
+            <input type="text" class="ing-qty" placeholder="Menge" value="${escapeHtml(ing.quantity || '')}" />
+            <input type="text" class="ing-unit" placeholder="Einheit" value="${escapeHtml(ing.unit || '')}" />
+            <input type="text" class="ing-name" placeholder="Zutat" value="${escapeHtml(ing.name || '')}" />
+            <button type="button" class="icon-btn ing-del" aria-label="Entfernen">×</button>
+          </div>
+        `).join('') || `<p class="muted small">Noch keine Zutaten.</p>`;
+        box.querySelectorAll('.ingredient-row').forEach(row => {
+          const idx = Number(row.dataset.idx);
+          row.querySelector('.ing-qty').addEventListener('input', e => { ingredients[idx].quantity = e.target.value; });
+          row.querySelector('.ing-unit').addEventListener('input', e => { ingredients[idx].unit = e.target.value; });
+          row.querySelector('.ing-name').addEventListener('input', e => { ingredients[idx].name = e.target.value; });
+          row.querySelector('.ing-del').addEventListener('click', () => { ingredients.splice(idx, 1); renderIngredientRows(); });
+        });
+      };
+      renderIngredientRows();
+      root.querySelector('#r-add-ingredient').addEventListener('click', () => {
+        ingredients.push({ id: uid(), quantity: '', unit: '', name: '' });
+        renderIngredientRows();
+      });
 
       const renderTags = () => {
         const box = root.querySelector('#r-tags');
@@ -702,6 +873,9 @@
         r.name = name;
         r.tags = chosenTags;
         r.rating = rating;
+        r.ingredients = ingredients
+          .filter(i => (i.name || '').trim())
+          .map(i => ({ id: i.id || uid(), quantity: (i.quantity || '').trim(), unit: (i.unit || '').trim(), name: i.name.trim() }));
         r.notes = root.querySelector('#r-notes').value.trim();
         if (isNew) state.recipes.push(r);
         else {
@@ -950,6 +1124,123 @@
   }
 
   // ------------------------------------------------------------------
+  // Bring! Anbindung (über eigenen Proxy — Bring hat keine öffentliche API)
+  // ------------------------------------------------------------------
+  function bringBase() {
+    return (state.settings.bringApiBase || '').replace(/\/+$/, '');
+  }
+
+  async function bringLogin(email, password) {
+    const base = bringBase();
+    if (!base) throw new Error('Backend-URL fehlt');
+    const res = await fetch(`${base}/api/bring/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.accessToken) throw new Error(data?.error || 'Login fehlgeschlagen');
+    state.bring = {
+      ...(state.bring || {}),
+      uuid: data.uuid,
+      accessToken: data.accessToken,
+      expiresAt: Date.now() + (data.expiresIn || 3600) * 1000,
+      email,
+    };
+    save();
+    return bringFetchLists();
+  }
+
+  async function bringFetchLists() {
+    const base = bringBase();
+    const res = await fetch(`${base}/api/bring/lists?uuid=${encodeURIComponent(state.bring.uuid)}`, {
+      headers: { Authorization: `Bearer ${state.bring.accessToken}` },
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || 'Listen konnten nicht geladen werden');
+    return data.lists || [];
+  }
+
+  async function bringSendItems(items) {
+    if (!state.bring?.accessToken) throw new Error('Nicht verbunden');
+    if (!state.bring.listUuid) throw new Error('Keine Bring-Liste ausgewählt');
+    const base = bringBase();
+    const res = await fetch(`${base}/api/bring/item`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.bring.accessToken}` },
+      body: JSON.stringify({ uuid: state.bring.uuid, listUuid: state.bring.listUuid, items }),
+    });
+    if (res.status === 401 || res.status === 403) throw new Error('EXPIRED');
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error || 'Senden fehlgeschlagen');
+    return data;
+  }
+
+  function openBringConnectModal() {
+    openModal(`
+      <h3>Mit Bring! verbinden</h3>
+      <label>E-Mail</label>
+      <input type="email" id="bring-email" value="${escapeHtml(state.bring?.email || '')}" placeholder="deine@email.de" />
+      <label>Passwort</label>
+      <input type="password" id="bring-password" placeholder="Passwort" />
+      <p class="muted small">Wird nicht gespeichert, nur über euren eigenen Proxy zum Anmelden bei Bring verwendet.</p>
+      <div class="actions">
+        <button class="btn ghost" data-close>Abbrechen</button>
+        <button class="btn" id="bring-login-go">Anmelden</button>
+      </div>
+    `, (root) => {
+      root.querySelector('[data-close]').addEventListener('click', closeModal);
+      root.querySelector('#bring-login-go').addEventListener('click', async () => {
+        const email = root.querySelector('#bring-email').value.trim();
+        const password = root.querySelector('#bring-password').value;
+        if (!email || !password) { toast('E-Mail und Passwort fehlen'); return; }
+        const btn = root.querySelector('#bring-login-go');
+        btn.disabled = true; btn.textContent = 'Verbinde…';
+        try {
+          const lists = await bringLogin(email, password);
+          closeModal();
+          const prev = lists.find(l => l.listUuid === state.bring.listUuid);
+          if (prev) {
+            toast(`Verbunden mit „${prev.name}"`);
+            if (currentView === 'settings') renderSettings();
+          } else {
+            openBringListPicker(lists);
+          }
+        } catch (e) {
+          toast(e.message || 'Verbindung fehlgeschlagen');
+          btn.disabled = false; btn.textContent = 'Anmelden';
+        }
+      });
+    });
+  }
+
+  function openBringListPicker(lists) {
+    if (!lists.length) { toast('Keine Bring-Listen gefunden'); return; }
+    openModal(`
+      <h3>Welche Bring-Liste?</h3>
+      <ul class="suggest-list">
+        ${lists.map(l => `
+          <li>
+            <div class="info"><div class="title">${escapeHtml(l.name)}</div></div>
+            <button class="btn" data-pick-list="${l.listUuid}" data-pick-name="${escapeHtml(l.name)}">Wählen</button>
+          </li>
+        `).join('')}
+      </ul>
+      <div class="actions"><button class="btn ghost" data-close>Abbrechen</button></div>
+    `, (root) => {
+      root.querySelector('[data-close]').addEventListener('click', closeModal);
+      root.querySelectorAll('[data-pick-list]').forEach(btn => btn.addEventListener('click', () => {
+        state.bring.listUuid = btn.dataset.pickList;
+        state.bring.listName = btn.dataset.pickName;
+        save();
+        closeModal();
+        toast(`Verbunden mit „${btn.dataset.pickName}"`);
+        if (currentView === 'settings') renderSettings();
+      }));
+    });
+  }
+
+  // ------------------------------------------------------------------
   // Import / Export / Seed / Reset
   // ------------------------------------------------------------------
   function download(name, text) {
@@ -967,10 +1258,23 @@
     const kids = { id: uid(), name: 'Kids', color: MEMBER_COLORS[2] };
     state.members = [anna, ben, kids];
     state.recipes = [
-      { id: uid(), name: 'Linsencurry', tags: ['vegetarisch', 'schnell', 'klassiker'], notes: 'Rote Linsen, Kokosmilch, Curry.', rating: 5, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0 },
-      { id: uid(), name: 'Ofengemüse mit Feta', tags: ['vegetarisch', 'ofen', 'schnell'], notes: '', rating: 4, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0 },
-      { id: uid(), name: 'Spaghetti Bolognese', tags: ['klassiker', 'kinderfreundlich'], notes: '', rating: 5, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0 },
-      { id: uid(), name: 'Kürbissuppe', tags: ['suppe', 'saisonal', 'vegetarisch'], notes: '', rating: 4, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0 },
+      { id: uid(), name: 'Linsencurry', tags: ['vegetarisch', 'schnell', 'klassiker'], notes: 'Rote Linsen, Kokosmilch, Curry.', rating: 5, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0, ingredients: [
+        { id: uid(), quantity: '200', unit: 'g', name: 'rote Linsen' },
+        { id: uid(), quantity: '400', unit: 'ml', name: 'Kokosmilch' },
+        { id: uid(), quantity: '1', unit: 'EL', name: 'Currypulver' },
+        { id: uid(), quantity: '1', unit: '', name: 'Zwiebel' },
+      ] },
+      { id: uid(), name: 'Ofengemüse mit Feta', tags: ['vegetarisch', 'ofen', 'schnell'], notes: '', rating: 4, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0, ingredients: [
+        { id: uid(), quantity: '500', unit: 'g', name: 'Ofengemüse (Mix)' },
+        { id: uid(), quantity: '200', unit: 'g', name: 'Feta' },
+        { id: uid(), quantity: '2', unit: 'EL', name: 'Olivenöl' },
+      ] },
+      { id: uid(), name: 'Spaghetti Bolognese', tags: ['klassiker', 'kinderfreundlich'], notes: '', rating: 5, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0, ingredients: [
+        { id: uid(), quantity: '500', unit: 'g', name: 'Spaghetti' },
+        { id: uid(), quantity: '400', unit: 'g', name: 'Hackfleisch' },
+        { id: uid(), quantity: '1', unit: 'Dose', name: 'stückige Tomaten' },
+      ] },
+      { id: uid(), name: 'Kürbissuppe', tags: ['suppe', 'saisonal', 'vegetarisch'], notes: '', rating: 4, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0, ingredients: [] },
       { id: uid(), name: 'Pfannkuchen', tags: ['süß', 'kinderfreundlich', 'schnell'], notes: '', rating: 3, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0 },
       { id: uid(), name: 'Wraps mit Hummus', tags: ['vegetarisch', 'schnell'], notes: '', rating: 4, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0 },
       { id: uid(), name: 'Fischstäbchen mit Kartoffelbrei', tags: ['klassiker', 'kinderfreundlich'], notes: '', rating: 3, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0 },
@@ -1046,6 +1350,44 @@
       save(); renderMenus(); toast('Woche geleert');
     });
     document.getElementById('btn-week-fill').addEventListener('click', fillWeekWithSuggestions);
+    document.getElementById('btn-go-shopping').addEventListener('click', () => go('shopping'));
+
+    // Einkaufsliste
+    document.getElementById('btn-shop-week-prev').addEventListener('click', () => { planningMonday = addDays(planningMonday, -7); renderShopping(); });
+    document.getElementById('btn-shop-week-next').addEventListener('click', () => { planningMonday = addDays(planningMonday, 7); renderShopping(); });
+    document.getElementById('btn-shopping-add').addEventListener('click', addShoppingExtra);
+    document.getElementById('shopping-add-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); addShoppingExtra(); }
+    });
+    document.getElementById('btn-shopping-clear-done').addEventListener('click', () => {
+      const week = getWeek(planningMonday);
+      week.shoppingChecked = {};
+      week.shoppingExtra = week.shoppingExtra.filter(x => !x.done);
+      save(); renderShopping(); toast('Erledigte entfernt');
+    });
+    document.getElementById('btn-shopping-copy').addEventListener('click', copyShoppingList);
+    document.getElementById('btn-shopping-bring').addEventListener('click', async () => {
+      const texts = shoppingOpenItems(planningMonday);
+      if (!texts.length) { toast('Liste ist leer'); return; }
+      if (!state.settings.bringApiBase) { toast('Erst in Einstellungen Bring verbinden'); go('settings'); return; }
+      if (!state.bring?.accessToken) { openBringConnectModal(); return; }
+      if (state.bring.expiresAt && Date.now() > state.bring.expiresAt) {
+        toast('Bring-Sitzung abgelaufen, bitte neu verbinden');
+        openBringConnectModal();
+        return;
+      }
+      try {
+        await bringSendItems(texts.map(name => ({ name })));
+        toast('An Bring gesendet');
+      } catch (e) {
+        if (e.message === 'EXPIRED') {
+          toast('Bring-Sitzung abgelaufen, bitte neu verbinden');
+          openBringConnectModal();
+        } else {
+          toast(e.message || 'Senden fehlgeschlagen');
+        }
+      }
+    });
 
     // Rezepte
     document.getElementById('btn-add-recipe').addEventListener('click', () => openRecipeEditor(null));
@@ -1101,6 +1443,21 @@
     });
     document.getElementById('btn-seed').addEventListener('click', seedData);
     document.getElementById('btn-reset').addEventListener('click', resetAll);
+
+    document.getElementById('bring-api-base').addEventListener('change', (e) => {
+      state.settings.bringApiBase = e.target.value.trim();
+      save();
+    });
+    document.getElementById('btn-bring-connect').addEventListener('click', () => {
+      if (!state.settings.bringApiBase) { toast('Erst Backend-URL eintragen'); return; }
+      openBringConnectModal();
+    });
+    document.getElementById('btn-bring-disconnect').addEventListener('click', () => {
+      state.bring = null;
+      save();
+      renderSettings();
+      toast('Getrennt');
+    });
   }
 
   // ------------------------------------------------------------------

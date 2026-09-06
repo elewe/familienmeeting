@@ -69,7 +69,32 @@
         <ul class="week-list" id="week-list"></ul>
         <div class="row-actions end">
           <button class="btn ghost" id="btn-week-clear">Woche leeren</button>
+          <button class="btn ghost" id="btn-go-shopping">Einkaufsliste</button>
           <button class="btn" id="btn-week-fill">Vorschläge für ganze Woche</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Einkaufsliste -->
+    <section class="view" data-view="shopping" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Einkaufsliste</h2>
+          <div class="row-actions">
+            <button class="btn ghost" id="btn-shop-week-prev" aria-label="Vorherige Woche">‹</button>
+            <button class="btn ghost" id="btn-shop-week-next" aria-label="Nächste Woche">›</button>
+          </div>
+        </div>
+        <div class="muted" id="shopping-week-label"></div>
+        <ul class="shopping-list" id="shopping-list"></ul>
+        <div class="add-row">
+          <input type="text" id="shopping-add-input" placeholder="Weiterer Artikel…" />
+          <button class="btn ghost" id="btn-shopping-add">+</button>
+        </div>
+        <div class="row-actions end">
+          <button class="btn ghost" id="btn-shopping-clear-done">Erledigte entfernen</button>
+          <button class="btn ghost" id="btn-shopping-copy">Kopieren/Teilen</button>
+          <button class="btn" id="btn-shopping-bring">An Bring senden</button>
         </div>
       </div>
     </section>
@@ -150,6 +175,16 @@
         </div>
       </div>
       <div class="card">
+        <div class="card-head"><h2>Bring! Einkaufsliste</h2></div>
+        <p class="muted small" id="bring-status">Nicht verbunden.</p>
+        <label>Backend-URL (Proxy für Bring-Login)</label>
+        <input type="text" id="bring-api-base" placeholder="https://dein-projekt.vercel.app" />
+        <div class="row-actions end">
+          <button class="btn ghost" id="btn-bring-disconnect" hidden>Trennen</button>
+          <button class="btn" id="btn-bring-connect">Verbinden</button>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-head"><h2>Über</h2></div>
         <p class="muted small">Familienmeeting · lokal gespeichert auf diesem Gerät. Keine Cloud, keine Konten.</p>
       </div>
@@ -184,6 +219,7 @@
     <div class="sheet-card">
       <button class="sheet-item" data-go="meeting">Meeting</button>
       <button class="sheet-item" data-go="menus">Menüs der Woche</button>
+      <button class="sheet-item" data-go="shopping">Einkaufsliste</button>
       <button class="sheet-item" data-go="recipes">Rezeptbibliothek</button>
       <button class="sheet-item" data-go="duties">Verantwortungen der Woche</button>
       <button class="sheet-item" data-go="packages">Pakete &amp; Familie</button>
