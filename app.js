@@ -19,6 +19,7 @@
     packages: [],
     resorts: [],
     weeks: {},
+    declutter: { history: { ort: [], frage: [], mut: [] }, kidsHistory: {} },
     settings: { seenSeedPrompt: false, bringApiBase: '' },
     bring: null,
   });
@@ -321,13 +322,14 @@
     duties: 'Verantwortungen',
     packages: 'Pakete & Familie',
     resorts: 'Familienressorts',
+    declutter: 'Ein Ort. Eine Woche.',
     notes: 'Themen & Notizen',
     more: 'Mehr',
     settings: 'Einstellungen',
   };
 
   // Views ohne eigenen Tab, die über den "Mehr"-Tab erreicht werden (Mobil/Tablet).
-  const MORE_VIEWS = new Set(['duties', 'packages', 'resorts', 'notes', 'settings', 'more']);
+  const MORE_VIEWS = new Set(['duties', 'packages', 'resorts', 'declutter', 'notes', 'settings', 'more']);
 
   let currentView = 'meeting';
   let planningMonday = defaultPlanningMonday();
@@ -363,6 +365,7 @@
       case 'duties': return renderDuties();
       case 'packages': return renderPackages();
       case 'resorts': return renderResorts();
+      case 'declutter': return renderDeclutter();
       case 'notes': return renderNotes();
       case 'settings': return renderSettings();
     }
@@ -1364,6 +1367,180 @@
         toast('Gelöscht');
       });
     });
+  }
+
+  // ------------------------------------------------------------------
+  // Ein Ort. Eine Woche. — Aufräum-Ritual fürs Familienmeeting
+  // ------------------------------------------------------------------
+  const DECLUTTER_ORT = [
+    { id: 'ort-flur', title: 'Flur & Garderobe', subtitle: 'Jacken, Taschen, Post' },
+    { id: 'ort-spielecke', title: 'Spielecke', subtitle: 'Das grosse Durcheinander' },
+    { id: 'ort-kuechentisch', title: 'Küchentisch', subtitle: 'Der Ort, wo alles landet' },
+    { id: 'ort-bad', title: 'Bad', subtitle: 'Fläschchen & Tüechli' },
+    { id: 'ort-kinderzimmer', title: 'Kinderzimmer', subtitle: 'Ein Kind entscheidet' },
+    { id: 'ort-wohnzimmer', title: 'Wohnzimmer', subtitle: 'Unser gemeinsamer Raum' },
+    { id: 'ort-keller', title: 'Keller / Estrich', subtitle: 'Was schlummert da?' },
+    { id: 'ort-schuhe', title: 'Schuhe', subtitle: 'Alle. Wirklich alle.' },
+    { id: 'ort-auto', title: 'Auto', subtitle: 'Rollendes Fundbüro' },
+    { id: 'ort-kuehlschrank', title: 'Kühlschrank', subtitle: 'Schnell und dankbar' },
+    { id: 'ort-buecherregal', title: 'Bücherregal', subtitle: 'Was wird nie mehr gelesen?' },
+    { id: 'ort-bastelecke', title: 'Bastelecke', subtitle: 'Schublade des Grauens' },
+  ];
+
+  const DECLUTTER_FRAGE = [
+    { id: 'frage-wohlgefuehlt', text: 'Wo habe ich mich diese Woche wohlgefühlt?' },
+    { id: 'frage-fehlen', text: 'Was würde dir fehlen, wenn das weg wäre?' },
+    { id: 'frage-brauchen', text: 'Was brauchen wir hier, damit es sich gut anfühlt?' },
+    { id: 'frage-gluecklich', text: 'Welches Ding macht dich glücklich, wenn du es siehst?' },
+    { id: 'frage-keinplatz', text: 'Was liegt hier rum, das gar keinen Platz hat?' },
+    { id: 'frage-reden', text: 'Wenn dieser Ort reden könnte — was würde er sagen?' },
+    { id: 'frage-frueher', text: 'Was war früher wichtig und ist es heute nicht mehr?' },
+    { id: 'frage-umzug', text: 'Was würdest du vermissen, wenn wir umziehen müssten?' },
+    { id: 'frage-niemandem', text: 'Was hier gehört eigentlich niemandem mehr?' },
+    { id: 'frage-oefter', text: 'Was möchtest du an diesem Ort öfter tun?' },
+  ];
+
+  const DECLUTTER_MUT = [
+    { id: 'mut-vielleicht-kiste', title: 'Vielleicht-Kiste', text: 'Jede:r legt ein Ding rein. Auch Mama. Auch Papa.' },
+    { id: 'mut-verschenk-runde', title: 'Verschenk-Runde', text: 'Eine Sache, die jemand anderem Freude machen soll.' },
+    { id: 'mut-5min-sprint', title: '5-Minuten-Sprint', text: 'Timer stellen. Alle zusammen. Los.' },
+    { id: 'mut-foto-statt-ding', title: 'Foto statt Ding', text: 'Erst fotografieren, dann loslassen.' },
+    { id: 'mut-doppelt-check', title: 'Doppelt-Check', text: 'Findet ihr etwas, das ihr zweimal habt?' },
+    { id: 'mut-stopp-karte', title: 'Stopp-Karte', text: 'Heute wird nur geredet. Nichts wird angefasst.' },
+    { id: 'mut-blind-griff', title: 'Blind-Griff', text: 'Augen zu, ein Ding nehmen. Behalten oder gehen lassen?' },
+    { id: 'mut-lieblingsplatz', title: 'Lieblingsplatz', text: 'Jede:r macht seinen Lieblingsplatz 3 Minuten schön.' },
+  ];
+
+  const DECLUTTER_FUER_DICH = [
+    { id: 'fd-3dinge', text: 'Finde 3 Dinge, die nicht hierher gehören.' },
+    { id: 'fd-lieblingsding', text: 'Zeig uns dein Lieblingsding und erzähl warum.' },
+    { id: 'fd-spielzeug', text: 'Such ein Spielzeug, das ein anderes Kind glücklich macht.' },
+    { id: 'fd-zeitwaechter', text: 'Du bist Zeitwächter:in. Sag Stopp nach 5 Minuten.' },
+    { id: 'fd-wettrennen', text: 'Wettrennen: 5 Dinge dorthin, wo sie hingehören.' },
+    { id: 'fd-schoenster-platz', text: 'Such den schönsten Platz im Raum. Setz dich hin.' },
+  ];
+
+  function ensureDeclutterState() {
+    if (!state.declutter) state.declutter = { history: { ort: [], frage: [], mut: [] }, kidsHistory: {} };
+    if (!state.declutter.history) state.declutter.history = { ort: [], frage: [], mut: [] };
+    if (!state.declutter.kidsHistory) state.declutter.kidsHistory = {};
+    return state.declutter;
+  }
+
+  // Zieht eine Karte aus dem Pool, ohne Wiederholung, bis alle Karten einmal dran waren.
+  function drawFromPool(pool, historyArr) {
+    let remaining = pool.filter(c => !historyArr.includes(c.id));
+    if (!remaining.length) {
+      historyArr.length = 0;
+      remaining = pool;
+    }
+    const card = remaining[Math.floor(Math.random() * remaining.length)];
+    historyArr.push(card.id);
+    return card;
+  }
+
+  function drawDeclutterWeek(monday) {
+    const d = ensureDeclutterState();
+    const week = getWeek(monday);
+    const ort = drawFromPool(DECLUTTER_ORT, d.history.ort);
+    const frage = drawFromPool(DECLUTTER_FRAGE, d.history.frage);
+    const mut = drawFromPool(DECLUTTER_MUT, d.history.mut);
+    week.declutter = { ortId: ort.id, frageId: frage.id, mutId: mut.id, kidsDrawn: {} };
+    save();
+  }
+
+  function drawDeclutterKidCard(monday, memberId) {
+    const d = ensureDeclutterState();
+    const week = getWeek(monday);
+    if (!week.declutter) return;
+    d.kidsHistory[memberId] = d.kidsHistory[memberId] || [];
+    const card = drawFromPool(DECLUTTER_FUER_DICH, d.kidsHistory[memberId]);
+    week.declutter.kidsDrawn = week.declutter.kidsDrawn || {};
+    week.declutter.kidsDrawn[memberId] = card.id;
+    save();
+  }
+
+  function renderDeclutter() {
+    const mon = defaultPlanningMonday();
+    const week = getWeek(mon);
+    document.getElementById('declutter-week-label').textContent = `KW ${isoWeekKey(mon).split('-W')[1]} · ${formatWeekRange(mon)}`;
+
+    const box = document.getElementById('declutter-week');
+    if (!week.declutter) {
+      box.innerHTML = `
+        <div class="declutter-intro">
+          <p class="muted small">Noch keine Karten für diese Woche gezogen.</p>
+          <button class="btn" id="btn-declutter-draw">Karten ziehen</button>
+        </div>
+      `;
+      box.querySelector('#btn-declutter-draw').addEventListener('click', () => {
+        drawDeclutterWeek(mon);
+        renderDeclutter();
+      });
+    } else {
+      const ort = DECLUTTER_ORT.find(c => c.id === week.declutter.ortId);
+      const frage = DECLUTTER_FRAGE.find(c => c.id === week.declutter.frageId);
+      const mut = DECLUTTER_MUT.find(c => c.id === week.declutter.mutId);
+      box.innerHTML = `
+        <div class="declutter-cards">
+          <div class="declutter-card declutter-card-ort">
+            <div class="dc-label">Ort</div>
+            <div class="dc-title">${escapeHtml(ort.title)}</div>
+            <div class="dc-sub">${escapeHtml(ort.subtitle)}</div>
+          </div>
+          <div class="declutter-card declutter-card-frage">
+            <div class="dc-label">Frage</div>
+            <div class="dc-text">${escapeHtml(frage.text)}</div>
+          </div>
+          <div class="declutter-card declutter-card-mut">
+            <div class="dc-label">Mut</div>
+            <div class="dc-title">${escapeHtml(mut.title)}</div>
+            <div class="dc-sub">${escapeHtml(mut.text)}</div>
+          </div>
+        </div>
+        <div class="row-actions end">
+          <button class="btn ghost" id="btn-declutter-redraw">Neu ziehen</button>
+        </div>
+      `;
+      box.querySelector('#btn-declutter-redraw').addEventListener('click', () => {
+        drawDeclutterWeek(mon);
+        renderDeclutter();
+      });
+    }
+
+    const d = ensureDeclutterState();
+    const histEl = document.getElementById('declutter-history-line');
+    histEl.textContent = d.history.ort.length
+      ? `${d.history.ort.length} von ${DECLUTTER_ORT.length} Orten in diesem Zyklus dran gewesen.`
+      : '';
+
+    const kidsList = document.getElementById('declutter-kids-list');
+    kidsList.innerHTML = '';
+    if (!state.members.length) {
+      kidsList.innerHTML = `<li class="muted small">Noch keine Familienmitglieder angelegt.</li>`;
+    } else if (!week.declutter) {
+      kidsList.innerHTML = `<li class="muted small">Erst die Wochenkarten ziehen, dann können Missionen gezogen werden.</li>`;
+    } else {
+      state.members.forEach(m => {
+        const cardId = week.declutter.kidsDrawn && week.declutter.kidsDrawn[m.id];
+        const card = cardId ? DECLUTTER_FUER_DICH.find(c => c.id === cardId) : null;
+        const li = document.createElement('li');
+        li.className = 'declutter-kid-row';
+        li.innerHTML = `
+          <span class="swatch" style="background:${m.color || '#C1592F'}"></span>
+          <span class="kid-name">${escapeHtml(m.name)}</span>
+          <span class="kid-card${card ? '' : ' empty'}">${card ? escapeHtml(card.text) : 'noch keine Mission gezogen'}</span>
+          <button class="btn ghost" data-draw-kid="${m.id}">${card ? 'Neu' : 'Ziehen'}</button>
+        `;
+        kidsList.appendChild(li);
+      });
+      kidsList.querySelectorAll('[data-draw-kid]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          drawDeclutterKidCard(mon, btn.dataset.drawKid);
+          renderDeclutter();
+        });
+      });
+    }
   }
 
   // ------------------------------------------------------------------
