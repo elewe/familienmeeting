@@ -534,6 +534,22 @@ textarea { resize: vertical; min-height: 80px; }
 .ingredient-row .ing-name { flex: 1; }
 .ingredient-row .ing-del { width: 36px; height: 36px; font-size: 18px; flex: 0 0 auto; }
 
+/* Item rows in package editor */
+.item-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.item-row { display: flex; gap: 6px; align-items: center; }
+.item-row .item-text { flex: 1; }
+.item-row .item-del { width: 36px; height: 36px; font-size: 18px; flex: 0 0 auto; }
+
+/* Punkte-Liste in der Paketbibliothek */
+.package-items { list-style: none; padding: 0; margin: 4px 0 0; }
+.package-items li {
+  font-size: 13px; color: var(--muted); padding: 2px 0 2px 14px; position: relative;
+}
+.package-items li::before {
+  content: ''; position: absolute; left: 2px; top: 10px;
+  width: 4px; height: 4px; border-radius: 999px; background: var(--muted-2);
+}
+
 /* Responsive tweaks */
 @media (max-width: 360px) {
   .week-list .day-name { flex: 0 0 80px; }

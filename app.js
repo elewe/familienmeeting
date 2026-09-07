@@ -612,6 +612,19 @@
     list.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => confirmDeleteRecipe(btn.dataset.del)));
   }
 
+  function packageItemsText(pkg) {
+    if (pkg.items && pkg.items.length) return pkg.items.map(i => i.text).join(' · ');
+    return pkg.description || '';
+  }
+
+  function packageItemsListHtml(pkg) {
+    if (pkg.items && pkg.items.length) {
+      return `<ul class="package-items">${pkg.items.map(i => `<li>${escapeHtml(i.text)}</li>`).join('')}</ul>`;
+    }
+    if (pkg.description) return `<div class="meta">${escapeHtml(pkg.description)}</div>`;
+    return '';
+  }
+
   function renderDuties() {
     document.getElementById('duties-week-label').textContent = `KW ${isoWeekKey(dutyMonday).split('-W')[1]} · ${formatWeekRange(dutyMonday)}`;
     const week = getWeek(dutyMonday);
@@ -629,7 +642,7 @@
       li.innerHTML = `
         <div class="info">
           <div class="title">${escapeHtml(pkg.name)}</div>
-          <div class="meta">${escapeHtml(pkg.description || pkg.frequency || 'wöchentlich')}</div>
+          <div class="meta">${escapeHtml(packageItemsText(pkg) || pkg.frequency || 'wöchentlich')}</div>
         </div>
         <button class="assignee ${member ? '' : 'empty'}" data-assign="${pkg.id}">${escapeHtml(member ? member.name : 'zuweisen')}</button>
       `;
@@ -652,7 +665,8 @@
         li.innerHTML = `
           <div class="info">
             <div class="title">${escapeHtml(p.name)}</div>
-            <div class="meta">${escapeHtml(p.description || '')}${p.description && p.frequency ? ' · ' : ''}${escapeHtml(p.frequency || '')}</div>
+            <div class="meta">${escapeHtml(p.frequency || '')}</div>
+            ${packageItemsListHtml(p)}
           </div>
           <div class="row-actions-inline">
             <button class="icon-btn" data-edit-pkg="${p.id}" aria-label="Bearbeiten">✎</button>
@@ -1104,15 +1118,18 @@
   // ------------------------------------------------------------------
   function openPackageEditor(id) {
     const isNew = !id;
-    const p = isNew ? { id: uid(), name: '', description: '', frequency: 'wöchentlich' }
+    const p = isNew ? { id: uid(), name: '', items: [], frequency: 'wöchentlich' }
                     : { ...state.packages.find(x => x.id === id) };
 
     openModal(`
       <h3>${isNew ? 'Neues Paket' : 'Paket bearbeiten'}</h3>
       <label>Name</label>
       <input type="text" id="p-name" value="${escapeHtml(p.name)}" placeholder="z. B. Küche wischen" />
-      <label>Beschreibung</label>
-      <textarea id="p-desc" placeholder="Was gehört dazu?">${escapeHtml(p.description || '')}</textarea>
+
+      <label>Punkte <span class="muted small">(was gehört dazu?)</span></label>
+      <div class="item-rows" id="p-items"></div>
+      <button type="button" class="btn ghost" id="p-add-item">+ Punkt</button>
+
       <label>Häufigkeit</label>
       <select id="p-freq">
         <option ${p.frequency === 'wöchentlich' ? 'selected' : ''}>wöchentlich</option>
@@ -1126,17 +1143,47 @@
         <button class="btn" id="p-save">Speichern</button>
       </div>
     `, (root) => {
+      // Ältere Pakete hatten ein Freitext-"description"-Feld statt einer Liste —
+      // beim Öffnen an Kommas aufsplitten, damit bestehende Inhalte nicht verloren gehen.
+      let items = p.items && p.items.length
+        ? p.items.map(i => ({ ...i }))
+        : (p.description || '').split(',').map(s => s.trim()).filter(Boolean).map(text => ({ id: uid(), text }));
+
+      const renderItemRows = () => {
+        const box = root.querySelector('#p-items');
+        box.innerHTML = items.map((item, idx) => `
+          <div class="item-row" data-idx="${idx}">
+            <input type="text" class="item-text" placeholder="z. B. Boden wischen" value="${escapeHtml(item.text || '')}" />
+            <button type="button" class="icon-btn item-del" aria-label="Entfernen">×</button>
+          </div>
+        `).join('') || `<p class="muted small">Noch keine Punkte.</p>`;
+        box.querySelectorAll('.item-row').forEach(row => {
+          const idx = Number(row.dataset.idx);
+          row.querySelector('.item-text').addEventListener('input', e => { items[idx].text = e.target.value; });
+          row.querySelector('.item-del').addEventListener('click', () => { items.splice(idx, 1); renderItemRows(); });
+        });
+      };
+      renderItemRows();
+      root.querySelector('#p-add-item').addEventListener('click', () => {
+        items.push({ id: uid(), text: '' });
+        renderItemRows();
+      });
+
       root.querySelector('[data-close]').addEventListener('click', closeModal);
       root.querySelector('#p-save').addEventListener('click', () => {
         const name = root.querySelector('#p-name').value.trim();
         if (!name) { toast('Name fehlt'); return; }
         p.name = name;
-        p.description = root.querySelector('#p-desc').value.trim();
+        p.items = items
+          .filter(i => (i.text || '').trim())
+          .map(i => ({ id: i.id || uid(), text: i.text.trim() }));
+        delete p.description;
         p.frequency = root.querySelector('#p-freq').value;
         if (isNew) state.packages.push(p);
         else {
           const idx = state.packages.findIndex(x => x.id === p.id);
           state.packages[idx] = { ...state.packages[idx], ...p };
+          delete state.packages[idx].description;
         }
         save();
         closeModal();
@@ -1461,12 +1508,12 @@
       { id: uid(), name: 'Fischstäbchen mit Kartoffelbrei', tags: ['klassiker', 'kinderfreundlich'], notes: '', rating: 3, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0 },
     ];
     state.packages = [
-      { id: uid(), name: 'Einkauf Wochenende', description: 'Großer Wochenendeinkauf inkl. Liste', frequency: 'wöchentlich' },
-      { id: uid(), name: 'Müll & Recycling', description: 'Papier, Plastik, Bio', frequency: 'wöchentlich' },
-      { id: uid(), name: 'Küche putzen', description: 'Boden wischen, Oberflächen', frequency: 'wöchentlich' },
-      { id: uid(), name: 'Bad putzen', description: 'Klo, Waschbecken, Dusche', frequency: 'wöchentlich' },
-      { id: uid(), name: 'Wäsche', description: 'Waschen, aufhängen, zusammenlegen', frequency: '2× pro Woche' },
-      { id: uid(), name: 'Kinder ins Bett', description: 'Zähne, Buch, Licht aus', frequency: 'täglich' },
+      { id: uid(), name: 'Einkauf Wochenende', items: [{ id: uid(), text: 'Großer Wochenendeinkauf inkl. Liste' }], frequency: 'wöchentlich' },
+      { id: uid(), name: 'Müll & Recycling', items: [{ id: uid(), text: 'Papier' }, { id: uid(), text: 'Plastik' }, { id: uid(), text: 'Bio' }], frequency: 'wöchentlich' },
+      { id: uid(), name: 'Küche putzen', items: [{ id: uid(), text: 'Boden wischen' }, { id: uid(), text: 'Oberflächen' }], frequency: 'wöchentlich' },
+      { id: uid(), name: 'Bad putzen', items: [{ id: uid(), text: 'Klo' }, { id: uid(), text: 'Waschbecken' }, { id: uid(), text: 'Dusche' }], frequency: 'wöchentlich' },
+      { id: uid(), name: 'Wäsche', items: [{ id: uid(), text: 'Waschen' }, { id: uid(), text: 'Aufhängen' }, { id: uid(), text: 'Zusammenlegen' }], frequency: '2× pro Woche' },
+      { id: uid(), name: 'Kinder ins Bett', items: [{ id: uid(), text: 'Zähne' }, { id: uid(), text: 'Buch' }, { id: uid(), text: 'Licht aus' }], frequency: 'täglich' },
     ];
     save();
     render();
