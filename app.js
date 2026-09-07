@@ -67,6 +67,11 @@
     if (error) throw error;
   }
 
+  async function signInWithOAuth(provider) {
+    const { error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: magicLinkRedirectUrl() } });
+    if (error) throw error;
+  }
+
   async function resolveHousehold(session) {
     await sb.rpc('claim_pending_household_invites');
     const { data, error } = await sb
@@ -178,6 +183,23 @@
       document.getElementById('auth-step-sent').hidden = true;
       document.getElementById('auth-step-email').hidden = false;
     });
+
+    const oauthBtn = (id, provider) => {
+      const btn = document.getElementById(id);
+      btn.addEventListener('click', async () => {
+        errorEl.hidden = true;
+        btn.disabled = true;
+        try {
+          await signInWithOAuth(provider);
+        } catch (e) {
+          errorEl.textContent = e.message || 'Anmeldung fehlgeschlagen';
+          errorEl.hidden = false;
+          btn.disabled = false;
+        }
+      });
+    };
+    oauthBtn('auth-google', 'google');
+    oauthBtn('auth-apple', 'apple');
   }
 
   function wireHouseholdGate() {

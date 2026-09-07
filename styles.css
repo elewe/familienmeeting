@@ -74,6 +74,23 @@ a:hover { color: var(--accent-strong); }
 .auth-card .btn.ghost { margin-top: 8px; }
 .auth-card .link { margin-top: 10px; }
 
+.auth-social { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.oauth-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.oauth-btn.oauth-google {
+  background: var(--card); color: var(--text); border: 1px solid var(--line);
+}
+.oauth-btn.oauth-apple { background: #000; color: #fff; }
+
+.auth-divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 16px 0 12px; color: var(--muted); font-size: 13px;
+}
+.auth-divider::before, .auth-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--line);
+}
+
 /* ------------------------------------------------------------------ */
 /* App shell                                                          */
 /* ------------------------------------------------------------------ */
