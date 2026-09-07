@@ -127,8 +127,12 @@
     duties: 'Verantwortungen',
     packages: 'Pakete & Familie',
     notes: 'Themen & Notizen',
+    more: 'Mehr',
     settings: 'Einstellungen',
   };
+
+  // Views ohne eigenen Tab, die über den "Mehr"-Tab erreicht werden (Mobil/Tablet).
+  const MORE_VIEWS = new Set(['duties', 'packages', 'notes', 'settings', 'more']);
 
   let currentView = 'meeting';
   let planningMonday = defaultPlanningMonday();
@@ -141,10 +145,13 @@
       el.hidden = el.dataset.view !== view;
     });
     document.querySelectorAll('.tab').forEach(el => {
+      const isMoreTab = el.dataset.go === 'more';
+      el.classList.toggle('active', isMoreTab ? MORE_VIEWS.has(view) : el.dataset.go === view);
+    });
+    document.querySelectorAll('.sidebar-item').forEach(el => {
       el.classList.toggle('active', el.dataset.go === view);
     });
     document.getElementById('view-title').textContent = VIEW_TITLES[view] || 'Familienmeeting';
-    closeSheet();
     render();
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
@@ -676,7 +683,6 @@
   const modalCard = document.getElementById('modal-card');
 
   function openModal(html, onMount) {
-    if (!sheetEl.hidden) closeSheet();
     modalCard.innerHTML = html;
     modalEl.hidden = false;
     document.body.style.overflow = 'hidden';
@@ -688,15 +694,6 @@
     document.body.style.overflow = '';
   }
   modalEl.addEventListener('click', e => { if (e.target === modalEl) closeModal(); });
-
-  const sheetEl = document.getElementById('sheet');
-  function openSheet() {
-    if (!modalEl.hidden) closeModal();
-    sheetEl.hidden = false;
-    document.body.style.overflow = 'hidden';
-  }
-  function closeSheet() { sheetEl.hidden = true; document.body.style.overflow = ''; }
-  sheetEl.addEventListener('click', e => { if (e.target === sheetEl) closeSheet(); });
 
   // ------------------------------------------------------------------
   // Meal-Picker
@@ -1335,8 +1332,6 @@
     document.querySelectorAll('[data-go]').forEach(el => {
       el.addEventListener('click', (e) => { e.preventDefault(); go(el.dataset.go); });
     });
-
-    document.getElementById('btn-menu').addEventListener('click', openSheet);
 
     // Meeting
     // (Agenda-Links greifen über [data-go])
