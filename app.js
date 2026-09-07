@@ -1,5 +1,5 @@
-// Familienmeeting — mobile-first, lokal gespeichert.
-// State im localStorage. Keine Cloud, keine Konten.
+// Familienmeeting — mobile-first, synchronisiert über Supabase.
+// State im localStorage zwischengespeichert, pro Haushalt in Supabase gesynct.
 
 (() => {
   'use strict';
@@ -38,6 +38,189 @@
 
   function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    schedulePush();
+  }
+
+  // ------------------------------------------------------------------
+  // Supabase: Auth & Haushalt-Sync
+  // ------------------------------------------------------------------
+  let sb = null;
+  let householdId = null;
+  let currentSession = null;
+  let appWired = false;
+  let pushTimer = null;
+
+  function showOnly(id) {
+    ['auth-gate', 'household-gate', 'app-shell'].forEach(elId => {
+      document.getElementById(elId).hidden = elId !== id;
+    });
+  }
+
+  function magicLinkRedirectUrl() {
+    return window.location.origin + window.location.pathname;
+  }
+
+  async function sendMagicLink(email) {
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: magicLinkRedirectUrl() } });
+    if (error) throw error;
+  }
+
+  async function resolveHousehold(session) {
+    await sb.rpc('claim_pending_household_invites');
+    const { data, error } = await sb
+      .from('household_members')
+      .select('household_id, role, households(name)')
+      .eq('user_id', session.user.id)
+      .limit(1);
+    if (error) throw error;
+    if (!data || !data.length) return null;
+    return { id: data[0].household_id, role: data[0].role, name: data[0].households?.name || 'Familie' };
+  }
+
+  async function createHousehold(session) {
+    const { data: hh, error: hhErr } = await sb.from('households').insert({ name: 'Familie', created_by: session.user.id }).select().single();
+    if (hhErr) throw hhErr;
+    const { error: memErr } = await sb.from('household_members').insert({ household_id: hh.id, email: session.user.email, user_id: session.user.id, role: 'owner' });
+    if (memErr) throw memErr;
+    const { error: dataErr } = await sb.from('household_data').insert({ household_id: hh.id, data: DEFAULT_STATE() });
+    if (dataErr) throw dataErr;
+    return { id: hh.id, role: 'owner', name: hh.name };
+  }
+
+  async function fetchRemoteState() {
+    const { data, error } = await sb.from('household_data').select('data').eq('household_id', householdId).single();
+    if (error) throw error;
+    return data?.data || null;
+  }
+
+  async function pushRemoteState() {
+    if (!householdId) return;
+    const { error } = await sb.from('household_data').update({ data: state, updated_at: new Date().toISOString() }).eq('household_id', householdId);
+    if (error) console.warn('Sync fehlgeschlagen', error);
+  }
+
+  function schedulePush() {
+    if (!householdId) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(pushRemoteState, 800);
+  }
+
+  async function enterApp(session) {
+    currentSession = session;
+    if (appWired) return; // Token-Refresh o.ä. — App läuft schon
+    let hh = null;
+    try {
+      hh = await resolveHousehold(session);
+    } catch (e) {
+      console.error('Haushalt konnte nicht geladen werden', e);
+    }
+    if (!hh) {
+      document.getElementById('household-gate-email').textContent = session.user.email;
+      showOnly('household-gate');
+      return;
+    }
+    await activateHousehold(hh);
+  }
+
+  async function activateHousehold(hh) {
+    householdId = hh.id;
+    try {
+      const remote = await fetchRemoteState();
+      if (remote) {
+        state = { ...DEFAULT_STATE(), ...remote };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+    } catch (e) {
+      console.warn('Konnte nicht synchronisieren, nutze lokalen Stand.', e);
+    }
+    showOnly('app-shell');
+    if (!appWired) {
+      wire();
+      appWired = true;
+    }
+    go('meeting');
+
+    if (!state.recipes.length && !state.members.length && !state.settings.seenSeedPrompt) {
+      state.settings.seenSeedPrompt = true;
+      save();
+      setTimeout(openWelcomeModal, 300);
+    }
+  }
+
+  function wireAuthGate() {
+    const emailInput = document.getElementById('auth-email');
+    const sendBtn = document.getElementById('auth-send-link');
+    const errorEl = document.getElementById('auth-error');
+    sendBtn.addEventListener('click', async () => {
+      const email = emailInput.value.trim();
+      if (!email) return;
+      errorEl.hidden = true;
+      sendBtn.disabled = true; sendBtn.textContent = 'Sende…';
+      try {
+        await sendMagicLink(email);
+        document.getElementById('auth-sent-email').textContent = email;
+        document.getElementById('auth-step-email').hidden = true;
+        document.getElementById('auth-step-sent').hidden = false;
+      } catch (e) {
+        errorEl.textContent = e.message || 'Senden fehlgeschlagen';
+        errorEl.hidden = false;
+      } finally {
+        sendBtn.disabled = false; sendBtn.textContent = 'Link senden';
+      }
+    });
+    document.getElementById('auth-resend').addEventListener('click', () => {
+      document.getElementById('auth-step-sent').hidden = true;
+      document.getElementById('auth-step-email').hidden = false;
+    });
+  }
+
+  function wireHouseholdGate() {
+    document.getElementById('household-create').addEventListener('click', async () => {
+      const btn = document.getElementById('household-create');
+      btn.disabled = true;
+      try {
+        const hh = await createHousehold(currentSession);
+        await activateHousehold(hh);
+      } catch (e) {
+        toast(e.message || 'Anlegen fehlgeschlagen');
+        btn.disabled = false;
+      }
+    });
+    document.getElementById('household-gate-retry').addEventListener('click', () => enterApp(currentSession));
+    document.getElementById('household-gate-signout').addEventListener('click', async () => {
+      await sb.auth.signOut();
+      window.location.reload();
+    });
+  }
+
+  async function renderHouseholdSettings() {
+    const nameLabel = document.getElementById('household-name-label');
+    const list = document.getElementById('household-member-list');
+    if (!householdId || !currentSession) return;
+    nameLabel.textContent = `Angemeldet als ${currentSession.user.email}`;
+    const { data, error } = await sb.from('household_members').select('email, role').eq('household_id', householdId).order('invited_at');
+    if (error) { list.innerHTML = `<li class="member-row muted small">Mitglieder konnten nicht geladen werden.</li>`; return; }
+    list.innerHTML = '';
+    (data || []).forEach(m => {
+      const li = document.createElement('li');
+      li.className = 'member-row';
+      li.innerHTML = `<span class="name">${escapeHtml(m.email)}</span><span class="muted small">${m.role === 'owner' ? 'Besitzer' : 'Mitglied'}</span>`;
+      list.appendChild(li);
+    });
+  }
+
+  function openWelcomeModal() {
+    openModal(`
+      <h3>Willkommen 👋</h3>
+      <p>Möchtest du mit ein paar Beispieldaten starten, um das Tool auszuprobieren? Du kannst später alles anpassen oder zurücksetzen.</p>
+      <div class="actions">
+        <button class="btn ghost" data-close>Leer starten</button>
+        <button class="btn" id="seed-ok">Beispieldaten laden</button>
+      </div>
+    `, (root) => {
+      root.querySelector('[data-close]').addEventListener('click', closeModal);
+      root.querySelector('#seed-ok').addEventListener('click', () => { seedData(); closeModal(); });
+    });
   }
 
   // ------------------------------------------------------------------
@@ -538,6 +721,7 @@
   }
 
   function renderSettings() {
+    renderHouseholdSettings();
     const baseInput = document.getElementById('bring-api-base');
     if (document.activeElement !== baseInput) baseInput.value = state.settings.bringApiBase || '';
     const status = document.getElementById('bring-status');
@@ -1453,32 +1637,52 @@
       renderSettings();
       toast('Getrennt');
     });
+
+    // Haushalt
+    document.getElementById('btn-household-invite').addEventListener('click', async () => {
+      const input = document.getElementById('household-invite-email');
+      const email = input.value.trim();
+      if (!email || !householdId) return;
+      try {
+        const { error } = await sb.from('household_members').insert({ household_id: householdId, email, role: 'member' });
+        if (error) throw error;
+        input.value = '';
+        toast('Eingeladen');
+        renderHouseholdSettings();
+      } catch (e) {
+        toast(e.message || 'Einladen fehlgeschlagen');
+      }
+    });
+    document.getElementById('btn-signout').addEventListener('click', async () => {
+      await sb.auth.signOut();
+      window.location.reload();
+    });
   }
 
   // ------------------------------------------------------------------
   // Boot
   // ------------------------------------------------------------------
   document.addEventListener('DOMContentLoaded', () => {
-    wire();
-    go('meeting');
+    wireAuthGate();
+    wireHouseholdGate();
+    showOnly('auth-gate');
 
-    // Erste Nutzung? Sanft auf Beispieldaten hinweisen.
-    if (!state.recipes.length && !state.members.length && !state.settings.seenSeedPrompt) {
-      state.settings.seenSeedPrompt = true;
-      save();
-      setTimeout(() => {
-        openModal(`
-          <h3>Willkommen 👋</h3>
-          <p>Möchtest du mit ein paar Beispieldaten starten, um das Tool auszuprobieren? Du kannst später alles anpassen oder zurücksetzen.</p>
-          <div class="actions">
-            <button class="btn ghost" data-close>Leer starten</button>
-            <button class="btn" id="seed-ok">Beispieldaten laden</button>
-          </div>
-        `, (root) => {
-          root.querySelector('[data-close]').addEventListener('click', closeModal);
-          root.querySelector('#seed-ok').addEventListener('click', () => { seedData(); closeModal(); });
-        });
-      }, 300);
+    if (!window.supabase) {
+      document.getElementById('auth-step-email').hidden = true;
+      const errorEl = document.getElementById('auth-error');
+      errorEl.textContent = 'Verbindung zu Supabase konnte nicht geladen werden. Internetverbindung prüfen und Seite neu laden.';
+      errorEl.hidden = false;
+      return;
     }
+
+    sb = window.supabase.createClient(window.SUPABASE_CONFIG.url, window.SUPABASE_CONFIG.publishableKey);
+    sb.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        enterApp(session);
+      } else {
+        currentSession = null;
+        showOnly('auth-gate');
+      }
+    });
   });
 })();

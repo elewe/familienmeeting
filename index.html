@@ -12,9 +12,48 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Figtree:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="manifest" href="manifest.webmanifest" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase-config.js"></script>
 </head>
+
 <body>
-  <div class="app-shell">
+  <!-- Anmeldung -->
+  <div class="auth-gate" id="auth-gate" hidden>
+    <div class="auth-card">
+      <div class="brand-mark auth-brand-mark">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l7-6 7 6"/><path d="M5 9v7a1 1 0 0 0 1 1h3v-4h2v4h3a1 1 0 0 0 1-1V9"/></svg>
+      </div>
+      <h1>Familienmeeting</h1>
+
+      <div id="auth-step-email">
+        <p class="muted">Melde dich mit deiner E-Mail an, um mit deiner Familie zu synchronisieren.</p>
+        <label>E-Mail</label>
+        <input type="email" id="auth-email" placeholder="du@familie.de" autocomplete="email" />
+        <button class="btn" id="auth-send-link">Link senden</button>
+      </div>
+
+      <p class="muted small" id="auth-error" hidden></p>
+
+      <div id="auth-step-sent" hidden>
+        <p>Check deine Mails — wir haben einen Login-Link geschickt an <strong id="auth-sent-email"></strong>.</p>
+        <button class="btn ghost" id="auth-resend">Andere E-Mail verwenden</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Haushalt einrichten -->
+  <div class="auth-gate" id="household-gate" hidden>
+    <div class="auth-card">
+      <h1>Fast geschafft</h1>
+      <p class="muted">Noch kein Haushalt gefunden für <strong id="household-gate-email"></strong>.</p>
+      <button class="btn" id="household-create">Haushalt "Familie" anlegen</button>
+      <p class="muted small">Wurdest du eingeladen? Bitte die einladende Person prüfen, ob deine E-Mail-Adresse dort genau stimmt, und versuch es erneut.</p>
+      <button class="btn ghost" id="household-gate-retry">Erneut prüfen</button>
+      <button class="link" id="household-gate-signout">Abmelden</button>
+    </div>
+  </div>
+
+  <div class="app-shell" id="app-shell" hidden>
 
     <!-- Sidebar (Web/Desktop ab ~900px) -->
     <nav class="sidebar" aria-label="Navigation">
@@ -244,6 +283,18 @@
         <!-- Einstellungen -->
         <section class="view" data-view="settings" hidden>
           <div class="card">
+            <div class="card-head"><h2>Haushalt</h2></div>
+            <p class="muted small" id="household-name-label"></p>
+            <ul class="member-list" id="household-member-list"></ul>
+            <div class="add-row">
+              <input type="email" id="household-invite-email" placeholder="E-Mail einladen…" />
+              <button class="btn ghost" id="btn-household-invite">+</button>
+            </div>
+            <div class="row-actions end">
+              <button class="btn ghost" id="btn-signout">Abmelden</button>
+            </div>
+          </div>
+          <div class="card">
             <div class="card-head"><h2>Daten</h2></div>
             <div class="settings-rows">
               <button class="btn ghost" id="btn-export">Export (JSON)</button>
@@ -267,7 +318,7 @@
           </div>
           <div class="card">
             <div class="card-head"><h2>Über</h2></div>
-            <p class="muted small">Familienmeeting · lokal gespeichert auf diesem Gerät. Keine Cloud, keine Konten.</p>
+            <p class="muted small">Familienmeeting · synchronisiert über euren Haushalt, dazu lokal zwischengespeichert auf diesem Gerät für den Offline-Fall.</p>
           </div>
         </section>
       </main>
