@@ -360,7 +360,7 @@ textarea { resize: vertical; min-height: 80px; }
 .meal-pill .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 36vw; }
 
 /* Recipe list */
-.recipe-list, .package-list, .member-list, .duty-list, .note-list { list-style: none; padding: 0; margin: 0; }
+.recipe-list, .package-list, .member-list, .duty-list, .note-list, .resort-list { list-style: none; padding: 0; margin: 0; }
 .recipe-row, .package-row, .member-row, .duty-row, .note-row {
   display: flex; align-items: center; gap: 10px;
   padding: 12px 4px; border-bottom: 1px solid var(--line-soft);
@@ -384,6 +384,27 @@ textarea { resize: vertical; min-height: 80px; }
   cursor: pointer;
 }
 .duty-row .assignee.empty { color: var(--muted); border-style: dashed; font-weight: 600; }
+
+/* Resort row */
+.resort-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 14px 4px; border-bottom: 1px solid var(--line-soft);
+}
+.resort-row:last-child { border-bottom: 0; }
+.resort-row .info { flex: 1; min-width: 0; }
+.resort-row .title { font-weight: 700; }
+.resort-row .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.resort-row .meta.due { color: var(--bad); font-weight: 700; }
+.resort-row .package-items { margin-top: 6px; }
+.resort-side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.resort-holder {
+  flex: 0 0 auto;
+  padding: 6px 12px; border-radius: 999px;
+  background: var(--card-2); border: 1px solid var(--line);
+  font-size: 13px; font-weight: 700; color: var(--text);
+  cursor: pointer;
+}
+.resort-holder.empty { color: var(--muted); border-style: dashed; font-weight: 600; }
 
 /* Member row */
 .member-row .swatch {

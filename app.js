@@ -17,6 +17,7 @@
     members: [],
     recipes: [],
     packages: [],
+    resorts: [],
     weeks: {},
     settings: { seenSeedPrompt: false, bringApiBase: '' },
     bring: null,
@@ -259,6 +260,12 @@
     return x;
   }
 
+  function addMonths(d, n) {
+    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    x.setMonth(x.getMonth() + n);
+    return x;
+  }
+
   function isoWeekKey(d) {
     // ISO week: donnerstagsverankert
     const t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -313,13 +320,14 @@
     recipes: 'Rezepte',
     duties: 'Verantwortungen',
     packages: 'Pakete & Familie',
+    resorts: 'Familienressorts',
     notes: 'Themen & Notizen',
     more: 'Mehr',
     settings: 'Einstellungen',
   };
 
   // Views ohne eigenen Tab, die über den "Mehr"-Tab erreicht werden (Mobil/Tablet).
-  const MORE_VIEWS = new Set(['duties', 'packages', 'notes', 'settings', 'more']);
+  const MORE_VIEWS = new Set(['duties', 'packages', 'resorts', 'notes', 'settings', 'more']);
 
   let currentView = 'meeting';
   let planningMonday = defaultPlanningMonday();
@@ -354,6 +362,7 @@
       case 'recipes': return renderRecipes();
       case 'duties': return renderDuties();
       case 'packages': return renderPackages();
+      case 'resorts': return renderResorts();
       case 'notes': return renderNotes();
       case 'settings': return renderSettings();
     }
@@ -704,6 +713,37 @@
     }
     ml.querySelectorAll('[data-edit-m]').forEach(btn => btn.addEventListener('click', () => openMemberEditor(btn.dataset.editM)));
     ml.querySelectorAll('[data-del-m]').forEach(btn => btn.addEventListener('click', () => confirmDeleteMember(btn.dataset.delM)));
+  }
+
+  function renderResorts() {
+    const list = document.getElementById('resort-list');
+    list.innerHTML = '';
+    if (!state.resorts.length) {
+      list.innerHTML = `<li class="resort-row"><div class="info muted small">Noch keine Familienressorts. Tippe „+ Neu".</div></li>`;
+      return;
+    }
+    const todayIso = isoDate(today());
+    state.resorts.forEach(r => {
+      const holder = state.members.find(m => m.id === r.holderId);
+      const due = r.reviewDate && r.reviewDate <= todayIso;
+      const reviewLabel = r.reviewDate ? `Review ${due ? 'fällig' : 'am'} ${formatDateShort(parseISO(r.reviewDate))}` : 'kein Review-Datum';
+      const li = document.createElement('li');
+      li.className = 'resort-row';
+      li.innerHTML = `
+        <div class="info">
+          <div class="title">${escapeHtml(r.name)}</div>
+          <div class="meta${due ? ' due' : ''}">${escapeHtml(reviewLabel)}</div>
+          ${packageItemsListHtml(r)}
+        </div>
+        <div class="resort-side">
+          <button class="resort-holder ${holder ? '' : 'empty'}" data-edit-resort="${r.id}">${escapeHtml(holder ? holder.name : 'offen')}</button>
+          <button class="icon-btn" data-del-resort="${r.id}" aria-label="Löschen">🗑</button>
+        </div>
+      `;
+      list.appendChild(li);
+    });
+    list.querySelectorAll('[data-edit-resort]').forEach(btn => btn.addEventListener('click', () => openResortEditor(btn.dataset.editResort)));
+    list.querySelectorAll('[data-del-resort]').forEach(btn => btn.addEventListener('click', () => confirmDeleteResort(btn.dataset.delResort)));
   }
 
   function renderNotes() {
@@ -1221,6 +1261,112 @@
   }
 
   // ------------------------------------------------------------------
+  // Familienressorts-Editor
+  // ------------------------------------------------------------------
+  function openResortEditor(id) {
+    const isNew = !id;
+    const r = isNew
+      ? { id: uid(), name: '', items: [], holderId: null, reviewDate: isoDate(addMonths(today(), 3)) }
+      : { ...state.resorts.find(x => x.id === id) };
+
+    openModal(`
+      <h3>${isNew ? 'Neues Familienressort' : 'Familienressort bearbeiten'}</h3>
+      <label>Name</label>
+      <input type="text" id="res-name" value="${escapeHtml(r.name)}" placeholder="z. B. Kita & Schule" />
+
+      <label>Punkte <span class="muted small">(was gehört alles dazu, auch das Mitdenken)</span></label>
+      <div class="item-rows" id="res-items"></div>
+      <button type="button" class="btn ghost" id="res-add-item">+ Punkt</button>
+
+      <label>Wer trägt es</label>
+      <select id="res-holder">
+        <option value="">— offen —</option>
+        ${state.members.map(m => `<option value="${m.id}" ${r.holderId === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+      </select>
+
+      <label>Nächster Review <span class="muted small">(mindestens 3 Monate, Wechsel nur im Familienmeeting)</span></label>
+      <input type="date" id="res-review" value="${escapeHtml(r.reviewDate || '')}" />
+      <div class="row-actions" style="margin-top:8px;">
+        <button type="button" class="btn ghost" id="res-review-3m">+3 Monate ab heute</button>
+      </div>
+
+      <div class="actions">
+        <button class="btn ghost" data-close>Abbrechen</button>
+        <button class="btn" id="res-save">Speichern</button>
+      </div>
+    `, (root) => {
+      let items = (r.items || []).map(i => ({ ...i }));
+
+      const renderItemRows = () => {
+        const box = root.querySelector('#res-items');
+        box.innerHTML = items.map((item, idx) => `
+          <div class="item-row" data-idx="${idx}">
+            <input type="text" class="item-text" placeholder="z. B. Elternmails lesen & beantworten" value="${escapeHtml(item.text || '')}" />
+            <button type="button" class="icon-btn item-del" aria-label="Entfernen">×</button>
+          </div>
+        `).join('') || `<p class="muted small">Noch keine Punkte.</p>`;
+        box.querySelectorAll('.item-row').forEach(row => {
+          const idx = Number(row.dataset.idx);
+          row.querySelector('.item-text').addEventListener('input', e => { items[idx].text = e.target.value; });
+          row.querySelector('.item-del').addEventListener('click', () => { items.splice(idx, 1); renderItemRows(); });
+        });
+      };
+      renderItemRows();
+      root.querySelector('#res-add-item').addEventListener('click', () => {
+        items.push({ id: uid(), text: '' });
+        renderItemRows();
+      });
+
+      root.querySelector('#res-review-3m').addEventListener('click', () => {
+        root.querySelector('#res-review').value = isoDate(addMonths(today(), 3));
+      });
+
+      root.querySelector('[data-close]').addEventListener('click', closeModal);
+      root.querySelector('#res-save').addEventListener('click', () => {
+        const name = root.querySelector('#res-name').value.trim();
+        if (!name) { toast('Name fehlt'); return; }
+        r.name = name;
+        r.items = items
+          .filter(i => (i.text || '').trim())
+          .map(i => ({ id: i.id || uid(), text: i.text.trim() }));
+        r.holderId = root.querySelector('#res-holder').value || null;
+        r.reviewDate = root.querySelector('#res-review').value || null;
+        if (isNew) state.resorts.push(r);
+        else {
+          const idx = state.resorts.findIndex(x => x.id === r.id);
+          state.resorts[idx] = { ...state.resorts[idx], ...r };
+        }
+        save();
+        closeModal();
+        renderResorts();
+        toast(isNew ? 'Ressort angelegt' : 'Gespeichert');
+      });
+    });
+  }
+
+  function confirmDeleteResort(id) {
+    const r = state.resorts.find(x => x.id === id);
+    if (!r) return;
+    openModal(`
+      <h3>Familienressort löschen?</h3>
+      <p>„${escapeHtml(r.name)}" wird entfernt.</p>
+      <div class="actions">
+        <button class="btn ghost" data-close>Abbrechen</button>
+        <button class="btn danger" id="del-ok">Löschen</button>
+      </div>
+    `, (root) => {
+      root.querySelector('[data-close]').addEventListener('click', closeModal);
+      root.querySelector('#del-ok').addEventListener('click', () => {
+        state.resorts = state.resorts.filter(x => x.id !== id);
+        save();
+        closeModal();
+        renderResorts();
+        toast('Gelöscht');
+      });
+    });
+  }
+
+  // ------------------------------------------------------------------
   // Mitglieder-Editor
   // ------------------------------------------------------------------
   const MEMBER_COLORS = ['#7aa8ff', '#a78bfa', '#34d399', '#fbbf24', '#f87171', '#38bdf8', '#f472b6', '#fb923c'];
@@ -1561,6 +1707,56 @@
         { id: uid(), text: 'Erinnerungen rechtzeitig setzen' },
       ] },
     ];
+    state.resorts = [
+      { id: uid(), name: 'Kita & Schule', holderId: anna.id, reviewDate: isoDate(addMonths(today(), 3)), items: [
+        { id: uid(), text: 'Elternmails lesen & beantworten' },
+        { id: uid(), text: 'Anmeldungen, Bewilligungen, Formulare' },
+        { id: uid(), text: 'Was muss mit (Turnzeug, Znüni, Verkleidung)' },
+        { id: uid(), text: 'Elternabende & Lehrer:innen-Kontakt' },
+        { id: uid(), text: 'Schul- & Ferienkalender im Blick' },
+      ] },
+      { id: uid(), name: 'Gesundheit der Familie', holderId: ben.id, reviewDate: isoDate(addMonths(today(), 3)), items: [
+        { id: uid(), text: 'Kinderarzt-Termine, Zahnarzt' },
+        { id: uid(), text: 'Vorsorgetermine Erwachsene' },
+        { id: uid(), text: 'Akut-Termine bei Krankheit' },
+        { id: uid(), text: 'Impfungen, Allergiepässe' },
+        { id: uid(), text: 'Krankenkasse: Rechnungen einreichen' },
+      ] },
+      { id: uid(), name: 'Einkauf & Vorräte', holderId: anna.id, reviewDate: isoDate(addMonths(today(), 3)), items: [
+        { id: uid(), text: 'Wochenmenü mitdenken (im Familienmeeting)' },
+        { id: uid(), text: 'Einkaufsliste pflegen' },
+        { id: uid(), text: 'Vorräte im Blick (Mehl, Öl, WC-Papier)' },
+        { id: uid(), text: 'Sonderwünsche kennen' },
+        { id: uid(), text: 'Lieferdienst-Bestellungen' },
+      ] },
+      { id: uid(), name: 'Wäsche & Textilpflege', holderId: ben.id, reviewDate: isoDate(addMonths(today(), 3)), items: [
+        { id: uid(), text: 'Sortieren & waschen' },
+        { id: uid(), text: 'Trocknen / Tumbler / Aufhängen' },
+        { id: uid(), text: 'Zusammenlegen & versorgen' },
+        { id: uid(), text: 'Bügeln (was muss?)' },
+        { id: uid(), text: 'Bettwäsche wechseln & Wechselrhythmus' },
+      ] },
+      { id: uid(), name: 'Kinderkleidung & Saison', holderId: null, reviewDate: isoDate(addMonths(today(), 3)), items: [
+        { id: uid(), text: 'Was passt noch? Was ist zu klein?' },
+        { id: uid(), text: 'Saisonwechsel (Herbst, Frühling)' },
+        { id: uid(), text: 'Nachkaufen: Schuhe, Jacken, Unterwäsche' },
+        { id: uid(), text: 'Sport-, Bade-, Regenkleidung' },
+        { id: uid(), text: 'Aussortieren & weitergeben' },
+      ] },
+      { id: uid(), name: 'Geburtstage & Geschenke', holderId: null, reviewDate: isoDate(addMonths(today(), 3)), items: [
+        { id: uid(), text: 'Familiengeburtstage merken & koordinieren' },
+        { id: uid(), text: 'Kindergeburtstage der Freunde (Geschenk, Karte)' },
+        { id: uid(), text: 'Eigene Kindergeburtstagsfeier (Konzept, Einladungen, Deko, Kuchen)' },
+        { id: uid(), text: 'Geschenke bei Hochzeiten, Geburten, Taufen' },
+      ] },
+      { id: uid(), name: 'Familienferien & Betreuung', holderId: null, reviewDate: isoDate(addMonths(today(), 3)), items: [
+        { id: uid(), text: 'Ferienplanung & Buchungen' },
+        { id: uid(), text: 'Schulferien-Betreuung (Grosseltern, Lager, Tagi+)' },
+        { id: uid(), text: 'Reisedokumente & Versicherungen' },
+        { id: uid(), text: 'Packlisten' },
+        { id: uid(), text: 'Vor Ort: Tagesgestaltung' },
+      ] },
+    ];
     save();
     render();
     toast('Beispieldaten geladen');
@@ -1681,6 +1877,9 @@
     // Pakete & Familie
     document.getElementById('btn-add-package').addEventListener('click', () => openPackageEditor(null));
     document.getElementById('btn-add-member').addEventListener('click', () => openMemberEditor(null));
+
+    // Familienressorts
+    document.getElementById('btn-add-resort').addEventListener('click', () => openResortEditor(null));
 
     // Notizen
     document.getElementById('btn-add-note').addEventListener('click', () => {
