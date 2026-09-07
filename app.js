@@ -78,13 +78,17 @@
   }
 
   async function createHousehold(session) {
-    const { data: hh, error: hhErr } = await sb.from('households').insert({ name: 'Familie', created_by: session.user.id }).select().single();
+    // ID selbst erzeugen und ohne .select() einfügen: .insert().select() würde die neue
+    // Zeile sofort zurücklesen wollen, aber die households_select_members-Policy lässt das
+    // erst zu, sobald man Mitglied ist — das ist man direkt nach dem Insert noch nicht.
+    const householdId = crypto.randomUUID();
+    const { error: hhErr } = await sb.from('households').insert({ id: householdId, name: 'Familie', created_by: session.user.id });
     if (hhErr) throw hhErr;
-    const { error: memErr } = await sb.from('household_members').insert({ household_id: hh.id, email: session.user.email, user_id: session.user.id, role: 'owner' });
+    const { error: memErr } = await sb.from('household_members').insert({ household_id: householdId, email: session.user.email, user_id: session.user.id, role: 'owner' });
     if (memErr) throw memErr;
-    const { error: dataErr } = await sb.from('household_data').insert({ household_id: hh.id, data: DEFAULT_STATE() });
+    const { error: dataErr } = await sb.from('household_data').insert({ household_id: householdId, data: DEFAULT_STATE() });
     if (dataErr) throw dataErr;
-    return { id: hh.id, role: 'owner', name: hh.name };
+    return { id: householdId, role: 'owner', name: 'Familie' };
   }
 
   async function fetchRemoteState() {
