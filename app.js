@@ -1512,12 +1512,54 @@
       { id: uid(), name: 'Fischstäbchen mit Kartoffelbrei', tags: ['klassiker', 'kinderfreundlich'], notes: '', rating: 3, createdAt: isoDate(today()), lastUsedAt: null, useCount: 0 },
     ];
     state.packages = [
-      { id: uid(), name: 'Einkauf Wochenende', items: [{ id: uid(), text: 'Großer Wochenendeinkauf inkl. Liste' }], frequency: 'wöchentlich' },
-      { id: uid(), name: 'Müll & Recycling', items: [{ id: uid(), text: 'Papier' }, { id: uid(), text: 'Plastik' }, { id: uid(), text: 'Bio' }], frequency: 'wöchentlich' },
-      { id: uid(), name: 'Küche putzen', items: [{ id: uid(), text: 'Boden wischen' }, { id: uid(), text: 'Oberflächen' }], frequency: 'wöchentlich' },
-      { id: uid(), name: 'Bad putzen', items: [{ id: uid(), text: 'Klo' }, { id: uid(), text: 'Waschbecken' }, { id: uid(), text: 'Dusche' }], frequency: 'wöchentlich' },
-      { id: uid(), name: 'Wäsche', items: [{ id: uid(), text: 'Waschen' }, { id: uid(), text: 'Aufhängen' }, { id: uid(), text: 'Zusammenlegen' }], frequency: '2× pro Woche' },
-      { id: uid(), name: 'Kinder ins Bett', items: [{ id: uid(), text: 'Zähne' }, { id: uid(), text: 'Buch' }, { id: uid(), text: 'Licht aus' }], frequency: 'täglich' },
+      { id: uid(), name: 'Bad putzen', frequency: 'wöchentlich', items: [
+        { id: uid(), text: 'WC, Lavabo, Dusche' },
+        { id: uid(), text: 'Spiegel & Armaturen' },
+        { id: uid(), text: 'Boden wischen' },
+        { id: uid(), text: 'Handtücher wechseln' },
+      ] },
+      { id: uid(), name: 'Wohnbereich ordnen', frequency: 'wöchentlich', items: [
+        { id: uid(), text: 'Spielsachen einräumen' },
+        { id: uid(), text: 'Sofa & Teppich richten' },
+        { id: uid(), text: 'Tische abräumen & wischen' },
+        { id: uid(), text: 'Kissen & Decken aufschütteln' },
+      ] },
+      { id: uid(), name: 'Boden saugen & wischen', frequency: 'wöchentlich', items: [
+        { id: uid(), text: 'Alle Wohnräume saugen' },
+        { id: uid(), text: 'Hartböden feucht wischen' },
+        { id: uid(), text: 'Teppich-Flecken behandeln' },
+        { id: uid(), text: 'Staubsaugerbeutel im Blick' },
+      ] },
+      { id: uid(), name: 'Lüften & Betten', frequency: 'täglich', items: [
+        { id: uid(), text: 'Morgens stosslüften' },
+        { id: uid(), text: 'Betten aufschütteln & richten' },
+        { id: uid(), text: 'Pyjamas zusammenlegen & versorgen' },
+        { id: uid(), text: 'Nach Duschen & Kochen lüften' },
+      ] },
+      { id: uid(), name: 'Zmorge vorbereiten', frequency: 'täglich', items: [
+        { id: uid(), text: 'Tisch decken' },
+        { id: uid(), text: 'Brot, Müesli, Aufstrich bereit' },
+        { id: uid(), text: 'Tee, Milch, Saft' },
+        { id: uid(), text: 'An Vorlieben der Kinder denken' },
+      ] },
+      { id: uid(), name: 'Haustiere füttern', frequency: 'täglich', items: [
+        { id: uid(), text: 'Morgens & abends füttern' },
+        { id: uid(), text: 'Frisches Wasser täglich' },
+        { id: uid(), text: 'Schlafplatz / Kistchen sauber' },
+        { id: uid(), text: 'Futtervorrat im Blick' },
+      ] },
+      { id: uid(), name: 'Pflanzen giessen', frequency: 'wöchentlich', items: [
+        { id: uid(), text: 'Innen & draussen schauen' },
+        { id: uid(), text: 'Wer braucht Wasser?' },
+        { id: uid(), text: 'Gelbe Blätter zupfen' },
+        { id: uid(), text: 'Bei Hitze öfter giessen' },
+      ] },
+      { id: uid(), name: 'Wochenkalender', frequency: 'wöchentlich', items: [
+        { id: uid(), text: 'Alle Termine eintragen' },
+        { id: uid(), text: 'Family-Sharing aktualisieren' },
+        { id: uid(), text: 'Doppelbuchungen klären' },
+        { id: uid(), text: 'Erinnerungen rechtzeitig setzen' },
+      ] },
     ];
     save();
     render();
